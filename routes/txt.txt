@@ -1,0 +1,193 @@
+const express = require("express");
+const route = express.Router();
+const Web3 = require("web3");
+const ether=require('ethers');
+const contractABI = require('../CrowdFunding.json')
+const { check, validationResult } = require("express-validator");
+const Tx = require('@ethereumjs/tx').Transaction;
+const process = require('node:process');
+// const { default: Web3 } = require("web3");
+
+
+
+
+
+
+//Query All Invoices
+route.get("/get-balance/:id?", async (req, res) => {
+  try {
+    const web3 = new Web3(new Web3.providers.HttpProvider('https://sepolia.infura.io/v3/09f4f4b0e0684e158957f135d5427303'));
+// console.log(web3);
+    // Get the balance of an Ethereum address
+    const address = req.params.id;
+    const balance = web3.eth.getBalance(address)
+
+    console.log('Balance:', balance, 'ETH');
+    return res.status(200).json({ balance: balance });
+
+
+  } catch (error) {
+    console.error(`Failed to evaluate transaction: ${error}`);
+    return res.status(400).json({ error: error });
+  }
+});
+
+
+route.post(
+  '/campaigns',
+
+  [
+
+    check("owner", "owner is required!").not().isEmpty(),
+    check("title", "title is required!").not().isEmpty(),
+    check("description", "description is required!").not().isEmpty(),
+    check("target", "target is required!").not().isEmpty(),
+    check("deadline", "deadline is required!").not().isEmpty(),
+    check("image", "image is required!").not().isEmpty(),
+    check("privateKey", "privateKey is required!").not().isEmpty(),
+    check("amount", "amount is required!").not().isEmpty(),
+  ],
+  async (req, res) => {
+    console.log(`campaigns Request: ${JSON.stringify(req.body)}`);
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      console.log(errors.array());
+      return res.status(400).json({ errors: errors.array() });
+    }
+    try {
+      const web3 = new Web3(new Web3.providers.HttpProvider('https://sepolia.infura.io/v3/09f4f4b0e0684e158957f135d5427303'));
+
+      const contractAddress = '0x067b53612ad65834457BB48477E712420FE49b7B';
+      const { owner, title, description, target, deadline, image, privateKey, amount } = req.body;
+      const account=web3.eth.accounts.privateKeyToAccount(privateKey );
+      console.log("account=====>",account)
+      web3.eth.defaultAccount=account.address;
+
+      // const account = web3.eth.accounts.privateKeyToAccount(privateKey);
+      const contract = new web3.eth.Contract(contractABI.abi, contractAddress, { from: account.address });
+
+      const data = await contract.methods.createCampaign(
+        owner,
+        title,
+        description,
+        target,
+        deadline,
+        image
+      );
+// console.log(data)
+      const count = await web3.eth.getTransactionCount(account.address);
+      const gasPrice = await web3.eth.getGasPrice();
+      const gasLimit = 5000000;
+      var private_Key = Buffer.from('9bb61b54e245e47423f21df55a073626baaf83055e33f57af4dfc054eedf2cff', 'hex');
+        const publicAddress=account.address;
+        console.log("address",publicAddress);
+      const rawTx = {
+        from: account.address,
+        nonce: web3.utils.toHex(count),
+        gasPrice: web3.utils.toHex(gasPrice),
+        gasLimit: web3.utils.toHex(gasLimit),
+        to: contractAddress,
+        value: web3.utils.toHex(amount),
+        data: data
+      };
+      console.log("rawTx",rawTx);
+      
+      var signedTx =await web3.eth.sign(rawTx ,iban = new web3.eth.Iban("9bb61b54e245e47423f21df55a073626baaf83055e33f57af4dfc054eedf2cff")).then(console.log);
+      
+      var serializedTx = signedTx.serialize();
+      console.log(serializedTx.toString('hex'));
+      // 0xf889808609184e72a00082271094000000000000000000000000000000000000000080a47f74657374320000000000000000000000000000000000000000000000000000006000571ca08a8bbf888cfa37bbf0bb965423625641fc956967b81d12e23709cead01446075a01ce999b56a8a88504be365442ea61239198e23d1fce7d00fcfc5cd3b44b7215f
+      
+     const receipt=await web3.eth.sendSignedTransaction(signedTx)
+      .on('receipt', console.log);
+
+  
+      res.json({ message: 'Campaign created', transactionHash: receipt });
+    } catch (error) {
+      console.log("error============>",error)
+      res.status(500).json({ message: 'Failed to create campaign', error: error.message });
+    }
+  }
+);
+
+// Donate to a campaign
+route.post(
+  '/campaigns/:id/donate',
+
+  [
+    check("privateKey", "privateKey is required!").not().isEmpty(),
+    check("amount", "amount is required!").not().isEmpty(),
+    check("id", "id is required!").not().isEmpty(),
+  ],
+  async (req, res) => {
+    console.log(`campaigns Request: ${JSON.stringify(req.body)}`);
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      console.log(errors.array());
+      return res.status(400).json({ errors: errors.array() });
+    }
+    try {
+
+
+      const { id } = req.params;
+      const { amount } = req.body;
+      const { privateKey } = req.body;
+      const contractAddress = '0x067b53612ad65834457BB48477E712420FE49b7B';
+      const account = web3.eth.accounts.privateKeyToAccount(privateKey);
+      const contract = new web3.eth.Contract(contractABI.abi, contractAddress, { from: account.address });
+      const data = contract.methods.donateToCampaign(id).encodeABI();
+
+      const count = await web3.eth.getTransactionCount(account.address);
+      const gasPrice = await web3.eth.getGasPrice();
+      const gasLimit = 3000000;
+
+      const rawTx = {
+        from: account.address,
+        nonce: web3.utils.toHex(count),
+        gasPrice: web3.utils.toHex(gasPrice),
+        gasLimit: web3.utils.toHex(gasLimit),
+        to: contractAddress,
+        value: web3.utils.toHex(amount),
+        data: data
+      };
+
+      const tx = new Tx(rawTx, { chain: 'mainnet' });
+      tx.sign(privateKey);
+
+      const serializedTx = tx.serialize();
+
+      const receipt = await web3.eth.sendSignedTransaction('0x' + serializedTx.toString('hex'));
+      res.json({ message: 'Donation successful', transactionHash: receipt.transactionHash });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to donate', error: error.message });
+    }
+  }
+);
+
+// Get donators of a campaign
+route.get('/campaigns/:id/donators', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await contract.methods.getDonators(id).call();
+
+    res.json({ message: 'Donators', data: result });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to get donators', error: error.message });
+  }
+});
+
+// Get all campaigns
+route.get('/campaigns', async (req, res) => {
+  try {
+
+    const result = await contract.methods.getCampaigns().call();
+
+    res.json({ message: 'Campaigns', data: result });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to get campaigns', error: error.message });
+  }
+});
+
+
+
+module.exports = route;
