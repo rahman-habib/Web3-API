@@ -66,7 +66,9 @@ route.get("/get-balance/:id?", async (req, res) => {
     // console.log(web3);
     // Get the balance of an Ethereum address
     const address = req.params.id;
-    const balance = await web3.eth.getBalance(address);
+    const accounts = await web3.eth.getAccounts()
+    const account = accounts[0];
+    const balance = await web3.eth.getBalance(account);
 
     console.log('Balance:', balance, 'ETH');
     return res.status(200).json({ balance: balance });
@@ -129,14 +131,12 @@ route.post(
       return res.status(400).json({ errors: errors.array() });
     }
     try {
-
-
       const { id } = req.params;
       const { amount } = req.body;
       const { privateKey } = req.body;
       const accounts = await web3.eth.getAccounts()
-      const account = accounts[0];
-      const data = await smartContract.methods.donateToCampaign(id).send({ from: account, to: contractAddress });
+      const account = accounts[1]; //change account number index if any error occure about out of gass 
+      const data = await smartContract.methods.donateToCampaign(id).send({ from: account, to: contractAddress,value:amount});
       res.json({ message: 'Donation successful', transactionHash: data });
     } catch (error) {
       res.status(500).json({ message: 'Failed to donate', error: error.message });
@@ -148,8 +148,10 @@ route.post(
 route.get('/campaigns/:id/donators', async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await smartContract.methods.getDonators(id).call();
-
+    const accounts = await web3.eth.getAccounts()
+    const account = accounts[0];
+    const result = await smartContract.methods.getDonators(id).send({from:account});
+console.log(result)
     res.json({ message: 'Donators', data: result });
   } catch (error) {
     res.status(500).json({ message: 'Failed to get donators', error: error.message });
@@ -159,10 +161,24 @@ route.get('/campaigns/:id/donators', async (req, res) => {
 // Get all campaigns
 route.get('/get-campaigns', async (req, res) => {
   try {
-
-    const result = await smartContract.methods.getCampaigns().call();
+    const accounts = await web3.eth.getAccounts()
+    const account = accounts[0];
+    const result = await smartContract.methods.getCampaigns().send({from:account});
 
     res.json({ message: 'Campaigns', data: result });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to get campaigns', error: error.message });
+  }
+});
+
+// Get all campaigns
+route.get('/get-accounts', async (req, res) => {
+  try {
+
+    const accounts = await web3.eth.getAccounts()
+    const account = accounts[0];
+
+    res.json({ message: 'Campaigns', data: accounts });
   } catch (error) {
     res.status(500).json({ message: 'Failed to get campaigns', error: error.message });
   }
