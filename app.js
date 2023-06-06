@@ -6,6 +6,8 @@ const http = require("http");
 var bodyParser = require("body-parser");
 const { check, validationResult } = require("express-validator");
 var express = require("express");
+// const Web3=require("web3")
+
 require('dotenv').config();
 // console.log(process.env) ;
 // const network = process.env.ETHEREUM_NETWORK;
